@@ -7,7 +7,6 @@
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
 // @match        http://localhost:8531/*
 // @match        http://127.0.0.1:8531/*
-// @match        https://rodeo-nrt.amazon.com/*
 // @updateURL    https://raw.githubusercontent.com/yuyna-amazon/Distribution-table-Auto-assign/main/AutoAssign.user.js
 // @downloadURL  https://raw.githubusercontent.com/yuyna-amazon/Distribution-table-Auto-assign/main/AutoAssign.user.js
 // @grant        unsafeWindow
