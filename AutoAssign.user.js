@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Distribution_table Auto assign
 // @namespace    https://github.com/yuyna-amazon/Distribution_table
-// @version      7.0
+// @version      7.1
 // @description  Rodeoデータ取得 + 配置表アプリへの生産性順自動配置
 // @author       yuyna
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
@@ -738,7 +738,7 @@
       uphRows +
 
       '<button id="aa-calc-run" style="width:100%;margin-top:6px;background:#0891b2;color:#fff;border:none;' +
-      'border-radius:5px;padding:6px;cursor:pointer;font-weight:700;font-size:11px;">算出して目標人数に入れる</button>' +
+      'border-radius:5px;padding:6px;cursor:pointer;font-weight:700;font-size:11px;">算出して必要人数に入れる</button>' +
       '<div id="aa-calcout" style="font-size:10px;color:#333;line-height:1.5;white-space:pre-wrap;margin-top:5px;"></div>';
   }
 
@@ -863,7 +863,7 @@
       (fd.skill ? ' / skill強調:' + fd.skill : '');
   }
 
-  // 目標人数の合計と、現在の配置合計を出す
+  // 必要人数の合計と、配置表の配置合計を出す
   function updateTotal(st) {
     if (!panelEl || !panelEl.isConnected) return;
     const el = panelEl.querySelector('#aa-total');
@@ -934,7 +934,7 @@
         '<span style="font-size:10px;color:#666;flex:none;" title="現在の配置 / 総セル数">' + p.filled + '/' + p.total + '</span>' +
         '<input type="number" inputmode="numeric" step="1" min="0" max="' + p.total + '" data-key="' + esc(p.key) + '" ' +
         'data-zone="' + esc(p.zone) + '" data-proc="' + esc(p.proc) + '" value="' + esc(v) + '" ' +
-        'placeholder="' + p.filled + '" title="目標人数。空欄=この工程は変更しない / 0=全員外す" ' +
+        'placeholder="' + p.filled + '" title="必要人数。空欄=この工程は変更しない / 0=全員外す" ' +
         'style="width:64px;flex:none;padding:3px 4px;border:1px solid #ccc;border-radius:4px;text-align:center;">' +
         '</div>';
     });
@@ -1186,7 +1186,7 @@
     dbg('入力を0にしました(' + n + '工程)');   // トーストは出さない
   }
 
-  // NeedHC は「目標人数」。現在より多ければ増員、少なければ減員し、同じなら何もしない。
+  // NeedHC は「必要人数」。現在より多ければ増員、少なければ減員し、同じなら何もしない。
   // よって何回押しても結果は同じ(冪等)。
   function run() {
     const st = readState();
@@ -1218,7 +1218,7 @@
     });
 
     if (!targets.length) {
-      log('目標人数が入力されていません');
+      log('必要人数が入力されていません');
       return;
     }
 
@@ -1255,7 +1255,7 @@
       const mark = after === t.need ? '✔ ' : '△ ';
       const sign = delta > 0 ? '+' + delta : String(delta);
       const reason = (t.added && t.added.reason) || (t.removed && t.removed.reason) || '';
-      let line = mark + t.ref.proc + ': ' + t.before + ' → ' + after + '名 (目標' + t.need + ', ' + sign + ')' +
+      let line = mark + t.ref.proc + ': ' + t.before + ' → ' + after + '名 (必要' + t.need + ', ' + sign + ')' +
         (after !== t.need && reason ? ' ' + reason : '');
       if (t.added && t.added.pairs.length) {
         line += '\n    + ' + t.added.pairs.map(p => p.name + (isNaN(p.val) ? '' : '(' + p.val + ')')).join(', ');
