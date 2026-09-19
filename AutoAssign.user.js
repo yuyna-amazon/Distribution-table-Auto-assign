@@ -8,8 +8,8 @@
 // @match        http://localhost:8531/*
 // @match        http://127.0.0.1:8531/*
 // @match        https://rodeo-nrt.amazon.com/*
-// @updateURL    https://raw.githubusercontent.com/yuyna-amazon/Distribution-table-Auto-assign/main/AutoAssign.js
-// @downloadURL  https://raw.githubusercontent.com/yuyna-amazon/Distribution-table-Auto-assign/main/AutoAssign.js
+// @updateURL    https://raw.githubusercontent.com/yuyna-amazon/Distribution-table-Auto-assign/main/AutoAssign.user.js
+// @downloadURL  https://raw.githubusercontent.com/yuyna-amazon/Distribution-table-Auto-assign/main/AutoAssign.user.js
 // @grant        unsafeWindow
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
