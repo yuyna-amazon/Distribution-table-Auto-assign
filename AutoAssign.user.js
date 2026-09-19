@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Distribution_table Auto assign
 // @namespace    https://github.com/yuyna-amazon/Distribution_table
-// @version      6.7
-// @description  Rodeoデータ取得 + 配置表アプリへの生産性順自動配置(配置表アプリ本体は変更しません)
+// @version      7.0
+// @description  Rodeoデータ取得 + 配置表アプリへの生産性順自動配置
 // @author       yuyna
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
 // @match        http://localhost:8531/*
@@ -669,6 +669,7 @@
       });
       lastCount = cs;
       updateFilterStat(st);
+      updateTotal(st);
     }
   }
 
@@ -771,6 +772,7 @@
       '<button id="aa-reset" title="入力した数値をすべて0にする(盤面は変更しない)" style="flex:none;background:#dc2626;color:#fff;' +
       'border:none;border-radius:5px;padding:7px 12px;cursor:pointer;font-weight:700;">Reset</button>' +
       '</div>' +
+      '<div id="aa-total" style="padding:0 12px 6px;font-size:11px;font-weight:700;color:#333;"></div>' +
       '<div style="padding:0 12px 6px;">' +
       '<span id="aa-calc-toggle" style="font-size:11px;font-weight:700;color:#8b5cf6;cursor:pointer;user-select:none;">' +
       '▸ Rodeo から NeedHC を算出</span></div>' +
@@ -861,6 +863,41 @@
       (fd.skill ? ' / skill強調:' + fd.skill : '');
   }
 
+  // 目標人数の合計と、現在の配置合計を出す
+  function updateTotal(st) {
+    if (!panelEl || !panelEl.isConnected) return;
+    const el = panelEl.querySelector('#aa-total');
+    if (!el) return;
+
+    let target = 0, filled = 0;
+    let nTarget = 0;
+    panelEl.querySelectorAll('input[data-key]').forEach(function (i) {
+      const raw = String(i.value).trim();
+      if (raw === '') return;
+      const n = parseInt(raw, 10);
+      if (isNaN(n) || n < 0) return;
+      target += n;
+      nTarget++;
+    });
+
+    const s = (st && st.ok) ? st : readState();
+    let cells = 0;
+    if (s.ok) {
+      collectProcs(s).forEach(function (p) { filled += p.filled; cells += p.total; });
+    }
+
+    const diff = target - filled;
+    el.innerHTML =
+      '必要 <span style="color:#8b5cf6;">' + (nTarget ? target : 0) + '</span>名' +
+      '<span style="font-weight:400;color:#888;font-size:10px;">(' + nTarget + '工程)</span>' +
+      ' / 配置表 ' + filled + '名' +
+      '<span style="font-weight:400;color:#888;font-size:10px;"> 全' + cells + '枠</span>' +
+      (nTarget && diff !== 0
+        ? ' <span style="color:' + (diff > 0 ? '#0891b2' : '#dc2626') + ';">' +
+          (diff > 0 ? '+' + diff : String(diff)) + '</span>'
+        : '');
+  }
+
   function refreshRows() {
     if (!panelEl || !panelEl.isConnected) return;
     const rowsEl = panelEl.querySelector('#aa-rows');
@@ -908,8 +945,11 @@
         const cleaned = inp.value.replace(/[^\d]/g, '');   // 整数のみ
         if (inp.value !== cleaned) inp.value = cleaned;
         needCache[inp.dataset.key] = inp.value;
+        updateTotal();
       });
     });
+
+    updateTotal(st);
 
     // いまの構成を記録しておき、以降の変化を検知する
     lastStruct = structSig(procs);
@@ -1129,6 +1169,7 @@
       applied.push('→ ' + m.proc + ' = ' + need + '名 (' + sum.toFixed(1) + 'を切り上げ)');
     });
 
+    updateTotal(st);
     calcOut(lines.join('\n') + '\n' + applied.join('\n') + '\n実行を押すと反映されます');
   }
 
@@ -1141,6 +1182,7 @@
       needCache[i.dataset.key] = '0';
       n++;
     });
+    updateTotal();
     dbg('入力を0にしました(' + n + '工程)');   // トーストは出さない
   }
 
