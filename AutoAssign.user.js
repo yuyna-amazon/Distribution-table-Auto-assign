@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Distribution_table Auto assign
 // @namespace    https://github.com/yuyna-amazon/Distribution_table
-// @version      7.1
+// @version      7.5
 // @description  Rodeoデータ取得 + 配置表アプリへの生産性順自動配置
 // @author       yuyna
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
 // @match        http://localhost:8531/*
 // @match        http://127.0.0.1:8531/*
+// @match        https://rodeo-nrt.amazon.com/*
 // @updateURL    https://raw.githubusercontent.com/yuyna-amazon/Distribution-table-Auto-assign/main/AutoAssign.user.js
 // @downloadURL  https://raw.githubusercontent.com/yuyna-amazon/Distribution-table-Auto-assign/main/AutoAssign.user.js
 // @grant        unsafeWindow
@@ -582,7 +583,6 @@
   // UI。パネルは破棄せず display で隠す。閉じても復帰タブから戻せる。
   // ------------------------------------------------------------
   const LS_HIDDEN = 'aa_panel_hidden';
-  const LS_POS = 'aa_panel_pos';
 
   let panelEl = null;    // パネル本体
   let tabEl = null;      // 復帰タブ
@@ -599,6 +599,7 @@
     ensureUI();
     // 何らかの理由でパネルがDOMから外れても自動で復帰させる
     setInterval(ensureUI, 2000);
+    window.addEventListener('resize', function () { placeTab(); placePanels(); });
     // Alt+A で表示/非表示
     window.addEventListener('keydown', function (ev) {
       if (ev.altKey && (ev.key === 'a' || ev.key === 'A')) {
@@ -618,8 +619,10 @@
       buildPanel();
       refreshRows();
     }
-    if (calcEl && !calcEl.isConnected) calcEl = null;
+    if (!calcEl || !calcEl.isConnected) buildCalcPanel();
     applyVisibility();
+    placeTab();
+    placePanels();
     if (!isHidden()) syncWithApp();
   }
 
@@ -672,12 +675,12 @@
     }
   }
 
+  // 2枚はセットで出し入れする
   function applyVisibility() {
     const hidden = isHidden();
     if (panelEl) panelEl.style.display = hidden ? 'none' : 'flex';
+    if (calcEl) calcEl.style.display = hidden ? 'none' : 'flex';
     if (tabEl) tabEl.style.display = hidden ? 'block' : 'none';
-    // 本体を隠したら算出パネルも隠す
-    if (hidden && calcEl && calcEl.isConnected) { calcEl.style.display = 'none'; calcToggleLabel(); }
   }
 
   function setVisible(v) {
@@ -692,11 +695,17 @@
     tabEl.textContent = '⚙ 自動配置';
     tabEl.title = '自動配置パネルを開く (Alt+A)';
     tabEl.style.cssText =
-      'position:fixed;bottom:14px;right:14px;z-index:2147483647;background:#8b5cf6;color:#fff;' +
+      'position:fixed;top:14px;right:14px;z-index:2147483647;background:#8b5cf6;color:#fff;' +
       'border-radius:6px;padding:7px 12px;font:700 12px sans-serif;cursor:pointer;' +
       'box-shadow:0 3px 12px rgba(0,0,0,.3);user-select:none;';
     tabEl.addEventListener('click', function () { setVisible(true); });
     document.body.appendChild(tabEl);
+    placeTab();
+  }
+
+  function placeTab() {
+    if (!tabEl || !tabEl.isConnected) return;
+    tabEl.style.top = Math.round(belowHeader()) + 'px';
   }
 
   // 算出パネルの中身。本体とは別のパネルに入る
@@ -736,33 +745,24 @@
       '<div style="font-size:10px;font-weight:700;margin:6px 0 2px;">UPH</div>' +
       uphRows +
 
-      '<button id="aa-calc-run" style="width:100%;margin-top:6px;background:#0891b2;color:#fff;border:none;' +
-      'border-radius:5px;padding:6px;cursor:pointer;font-weight:700;font-size:11px;">算出して必要人数に入れる</button>' +
-      '<div id="aa-calcout" style="font-size:10px;color:#333;line-height:1.5;white-space:pre-wrap;margin-top:5px;"></div>';
+      '<div id="aa-calcout" style="font-size:10px;color:#333;line-height:1.5;white-space:pre-wrap;margin-top:6px;"></div>' +
+      '<button id="aa-calc-apply" disabled style="width:100%;margin-top:6px;background:#8b5cf6;color:#fff;' +
+      'border:none;border-radius:5px;padding:6px;font-weight:700;font-size:11px;opacity:.45;cursor:default;">' +
+      '必要人数に入れる</button>';
   }
 
   function buildPanel() {
     panelEl = document.createElement('div');
     panelEl.id = 'aa-panel';
+    // 右上に固定。左辺は算出パネルと接するので角を落とす
     panelEl.style.cssText =
       'position:fixed;z-index:2147483647;background:#fff;color:#111;' +
-      'border:1px solid #bbb;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);' +
-      'width:330px;max-height:78vh;display:flex;flex-direction:column;' +
-      'font-family:sans-serif;font-size:12px;';
-
-    // 位置を復元(ドラッグ済みなら left/top、未ドラッグなら右下)
-    const pos = lsGet(LS_POS);
-    if (pos && /^\d+,\d+$/.test(pos)) {
-      const xy = pos.split(',');
-      panelEl.style.left = xy[0] + 'px';
-      panelEl.style.top = xy[1] + 'px';
-    } else {
-      panelEl.style.right = '14px';
-      panelEl.style.bottom = '14px';
-    }
+      'border:1px solid #bbb;border-radius:0 8px 8px 0;box-shadow:0 6px 20px rgba(0,0,0,.25);' +
+      'width:' + MAIN_W + 'px;max-height:78vh;display:flex;flex-direction:column;' +
+      'font-family:sans-serif;font-size:12px;left:0;top:0;';
 
     panelEl.innerHTML =
-      '<div id="aa-head" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px 6px;font-weight:700;cursor:move;">' +
+      '<div id="aa-head" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px 6px;font-weight:700;">' +
       '<span>自動配置</span>' +
       '<span id="aa-close" title="閉じる (Alt+Aで再表示)" style="cursor:pointer;color:#888;">✕</span></div>' +
       '<div id="aa-fstat" style="padding:0 12px 6px;font-size:10px;color:#666;"></div>' +
@@ -771,10 +771,7 @@
       '<button id="aa-reset" title="入力した数値をすべて0にする(盤面は変更しない)" style="flex:none;background:#dc2626;color:#fff;' +
       'border:none;border-radius:5px;padding:7px 12px;cursor:pointer;font-weight:700;">Reset</button>' +
       '</div>' +
-      '<div id="aa-total" style="padding:0 12px 6px;font-size:11px;font-weight:700;color:#333;"></div>' +
-      '<div style="padding:0 12px 6px;">' +
-      '<span id="aa-calc-toggle" style="font-size:11px;font-weight:700;color:#8b5cf6;cursor:pointer;user-select:none;">' +
-      '▸ Rodeo から NeedHC を算出</span></div>' +
+      '<div id="aa-total" style="padding:0 12px 8px;font-size:11px;font-weight:700;color:#333;"></div>' +
       '<div id="aa-rows" style="overflow:auto;padding:0 12px 10px;flex:1;"></div>';
 
     document.body.appendChild(panelEl);
@@ -783,46 +780,8 @@
     panelEl.querySelector('#aa-close').addEventListener('click', function () { setVisible(false); });
     panelEl.querySelector('#aa-reset').addEventListener('click', reset);
     panelEl.querySelector('#aa-run').addEventListener('click', run);
-    panelEl.querySelector('#aa-calc-toggle').addEventListener('click', toggleCalc);
-    calcToggleLabel();
-
-    // 本体を動かしたら算出パネルも付いてくる
-    makeDraggable(panelEl, panelEl.querySelector('#aa-head'), placeCalc);
   }
 
-  function makeDraggable(el, handle, onMove) {
-    let dx = 0, dy = 0, dragging = false;
-    handle.addEventListener('mousedown', function (ev) {
-      if (ev.target.id === 'aa-close') return;
-      const r = el.getBoundingClientRect();
-      // right/bottom 指定から left/top 指定へ切り替える
-      el.style.left = r.left + 'px';
-      el.style.top = r.top + 'px';
-      el.style.right = 'auto';
-      el.style.bottom = 'auto';
-      dx = ev.clientX - r.left;
-      dy = ev.clientY - r.top;
-      dragging = true;
-      ev.preventDefault();
-    });
-    window.addEventListener('mousemove', function (ev) {
-      if (!dragging) return;
-      const x = Math.max(0, Math.min(window.innerWidth - 60, ev.clientX - dx));
-      const y = Math.max(0, Math.min(window.innerHeight - 30, ev.clientY - dy));
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      if (typeof onMove === 'function') onMove();
-    });
-    window.addEventListener('mouseup', function () {
-      if (!dragging) return;
-      dragging = false;
-      // 位置を覚えるのは本体パネルだけ。算出パネルは本体に追従させる
-      if (el === panelEl) {
-        const r = el.getBoundingClientRect();
-        lsSet(LS_POS, Math.round(r.left) + ',' + Math.round(r.top));
-      }
-    });
-  }
 
   // パネル内のログ欄は廃止した。要点はアプリのトースト、明細はコンソールへ出す
   function log(s) {
@@ -955,75 +914,81 @@
     lastCount = countSig(procs);
   }
 
-  let calcRows = null;   // 貼り付けを解析した結果
+  let calcRows = null;   // Rodeoから取得したデータの解析結果
+  let lastCalc = null;   // 直近の算出結果。反映ボタンで使う
 
   const CALC_W = 300;
+  const MAIN_W = 330;
+  const MARGIN = 14;
 
-  // 本体パネルの左に並べる。左に入らなければ右、それも無理なら画面内に収める
-  function placeCalc() {
-    if (!calcEl || !panelEl || calcEl.style.display === 'none') return;
-    const r = panelEl.getBoundingClientRect();
-    let left = r.left - CALC_W - 8;
-    if (left < 4) left = r.right + 8;
-    if (left + CALC_W > window.innerWidth - 4) left = Math.max(4, window.innerWidth - CALC_W - 4);
-    calcEl.style.left = Math.round(left) + 'px';
-    calcEl.style.top = Math.round(Math.max(4, r.top)) + 'px';
+  // 2枚を1つの塊として右上に固定する。算出パネル(左) + 本体(右) で隙間なく並べる
+  function placePanels() {
+    const top = belowHeader();
+    let right = window.innerWidth - MARGIN;
+    const total = CALC_W + MAIN_W;
+    let left = right - total;
+    if (left < 4) { left = 4; right = Math.min(window.innerWidth - 4, left + total); }
+
+    if (calcEl && calcEl.isConnected) {
+      calcEl.style.left = Math.round(left) + 'px';
+      calcEl.style.top = Math.round(top) + 'px';
+    }
+    if (panelEl && panelEl.isConnected) {
+      panelEl.style.left = Math.round(left + CALC_W) + 'px';
+      panelEl.style.top = Math.round(top) + 'px';
+    }
   }
 
-  function calcToggleLabel() {
-    const tg = panelEl && panelEl.querySelector('#aa-calc-toggle');
-    if (!tg) return;
-    const open = calcEl && calcEl.isConnected && calcEl.style.display !== 'none';
-    tg.textContent = (open ? '▾' : '▸') + ' Rodeo から NeedHC を算出';
-  }
-
-  function toggleCalc() {
-    if (calcEl && !calcEl.isConnected) calcEl = null;
-    if (!calcEl) { buildCalcPanel(); calcEl.style.display = 'none'; }
-    const open = calcEl.style.display !== 'none';
-    calcEl.style.display = open ? 'none' : 'flex';
-    if (!open) placeCalc();
-    calcToggleLabel();
+  // アプリの header の直下。header の高さは内容で変わるので毎回実測する
+  function belowHeader() {
+    let top = MARGIN;
+    try {
+      const h = document.querySelector('header');
+      if (h) {
+        const r = h.getBoundingClientRect();
+        if (r.height > 0) top = r.bottom + 6;
+      }
+    } catch (_) {}
+    return Math.max(4, top);
   }
 
   function buildCalcPanel() {
     calcEl = document.createElement('div');
     calcEl.id = 'aa-calcpanel';
+    // 右辺は本体と接するので角を落とし、境界線を二重にしない
     calcEl.style.cssText =
       'position:fixed;z-index:2147483647;background:#fff;color:#111;' +
-      'border:1px solid #bbb;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);' +
+      'border:1px solid #bbb;border-right:none;border-radius:8px 0 0 8px;' +
+      'box-shadow:0 6px 20px rgba(0,0,0,.25);' +
       'width:' + CALC_W + 'px;max-height:78vh;display:flex;flex-direction:column;' +
       'font-family:sans-serif;font-size:12px;left:0;top:0;';
     calcEl.innerHTML =
-      '<div id="aa-calchead" style="display:flex;justify-content:space-between;align-items:center;' +
-      'padding:10px 12px 6px;font-weight:700;cursor:move;">' +
-      '<span>NeedHC 算出</span>' +
-      '<span id="aa-calcclose" title="閉じる" style="cursor:pointer;color:#888;">✕</span></div>' +
+      '<div id="aa-calchead" style="display:flex;align-items:center;' +
+      'padding:10px 12px 6px;font-weight:700;">' +
+      '<span>NeedHC 算出</span></div>' +
       '<div style="overflow:auto;padding:0 12px 10px;">' + calcInner() + '</div>';
     document.body.appendChild(calcEl);
     wireCalc();
-    makeDraggable(calcEl, calcEl.querySelector('#aa-calchead'));
   }
 
   function wireCalc() {
-    calcEl.querySelector('#aa-calcclose').addEventListener('click', function () {
-      calcEl.style.display = 'none';
-      calcToggleLabel();
+    calcEl.querySelector('#aa-cpt').addEventListener('change', function () {
+      showCptInfo();
+      autoCalc();
     });
 
-    calcEl.querySelector('#aa-cpt').addEventListener('change', showCptInfo);
-
-    // UPH は入力のたびに保存する
+    // UPH は入力のたびに保存し、都度計算し直す
     calcEl.querySelectorAll('input[data-uph]').forEach(function (i) {
-      i.addEventListener('input', saveUph);
+      i.addEventListener('input', function () { saveUph(); autoCalc(); });
     });
     // Ajast Time は残り時間の表示にも効くので即反映する
     calcEl.querySelector('#aa-ajast').addEventListener('input', function () {
       saveUph();
       showCptInfo();
+      autoCalc();
     });
 
-    calcEl.querySelector('#aa-calc-run').addEventListener('click', calcRun);
+    calcEl.querySelector('#aa-calc-apply').addEventListener('click', calcApply);
 
     const site = calcEl.querySelector('#aa-site');
     site.addEventListener('input', function () {
@@ -1087,6 +1052,19 @@
     return isNaN(v) ? 0 : v;
   }
 
+  // 結果を無効化する。データが無い・条件が不正なときに使う
+  function invalidateCalc() {
+    lastCalc = null;
+    setApplyEnabled(false);
+  }
+
+  // CPTやUPHを変えたら自動で計算し直す。入力中の連打を抑えるため少し待つ
+  let calcTimer = null;
+  function autoCalc() {
+    if (calcTimer) clearTimeout(calcTimer);
+    calcTimer = setTimeout(function () { calcTimer = null; calcRun(); }, 250);
+  }
+
   function calcOut(s) {
     const el = calcEl && calcEl.querySelector('#aa-calcout');
     if (el) el.textContent = s;
@@ -1098,6 +1076,7 @@
     const r = parseRodeo(text);
     if (r.err) { calcRows = null; sel.innerHTML = ''; calcOut('読み取り失敗: ' + r.err); showCptInfo(); return; }
     calcRows = r.rows;
+    invalidateCalc();
     const list = cptList(calcRows);
     const def = defaultCpt(list);
     sel.innerHTML = list.map(function (c) {
@@ -1107,6 +1086,7 @@
     calcOut(calcRows.length + '行を読み込みました / CPT候補 ' + list.length + '件' +
       (r.skipped ? ' / ' + r.skipped + '行を読み飛ばし' : ''));
     showCptInfo();
+    calcRun();                 // 取得したらすぐ算出する
   }
 
   function showCptInfo() {
@@ -1122,10 +1102,12 @@
       (hl <= 0 ? '  ← CPTを過ぎています' : '');
   }
 
+  // 自動で呼ばれる。データが無いときは取得案内を消さないよう黙って戻る
   function calcRun() {
-    if (!calcRows) { calcOut('先に「Rodeoから取得」を押してください'); return; }
+    if (!calcEl || !calcEl.isConnected) return;
+    if (!calcRows) { invalidateCalc(); return; }
     const t = parseInt(calcEl.querySelector('#aa-cpt').value, 10);
-    if (!t) { calcOut('CPTを選択してください'); return; }
+    if (!t) { invalidateCalc(); return; }
 
     const uph = {};
     calcEl.querySelectorAll('input[data-uph]').forEach(function (i) {
@@ -1135,6 +1117,7 @@
 
     const r = computeNeed(calcRows, t, uph, aj);
     if (r.hoursLeft <= 0) {
+      invalidateCalc();
       calcOut('残り時間が0以下です(' + r.hoursLeft.toFixed(2) + 'h)。CPTか Ajast Time を見直してください');
       return;
     }
@@ -1147,29 +1130,61 @@
         ' = ' + (isNaN(d.hc) ? '算出不可' : d.hc.toFixed(1)));
     });
 
-    // 配置表の工程へ割り当てる。小数は切り上げて整数にする
+    // 配置表の工程へ割り当てた結果を予告するだけ。入力欄には書かない
     const st = readState();
     const procs = st.ok ? collectProcs(st) : [];
-    const applied = [];
-    BOARD_MAP.forEach(function (m) {
+    const tg = boardTargets(r.detail, procs);
+    tg.forEach(function (x) {
+      if (x.ng) { lines.push('✕ ' + x.proc + ': UPH未設定'); return; }
+      if (!x.ref) { lines.push('✕ ' + x.proc + ': 配置表に該当工程なし'); return; }
+      lines.push('→ ' + x.proc + ' = ' + x.need + '名 (' + x.sum.toFixed(1) + 'を切り上げ)');
+    });
+
+    lastCalc = { detail: r.detail, text: lines.join('\n') };
+    setApplyEnabled(true);
+    calcOut(lastCalc.text);
+  }
+
+  // 6工程の NeedHC を配置表の4工程へまとめる。書き込みはしない
+  function boardTargets(detail, procs) {
+    return BOARD_MAP.map(function (m) {
       let sum = 0, ng = false;
       m.from.forEach(function (k) {
-        const hc = r.detail[k].hc;
+        const hc = detail[k].hc;
         if (isNaN(hc)) ng = true; else sum += hc;
       });
-      if (ng) { applied.push('✕ ' + m.proc + ': UPH未設定'); return; }
-      const need = Math.ceil(sum - 1e-9);
-      const p = procs.find(x => x.proc === m.proc);
-      if (!p) { applied.push('✕ ' + m.proc + ': 配置表に該当工程なし'); return; }
-      const inp = panelEl.querySelector('input[data-key="' + p.key + '"]');
-      if (!inp) { applied.push('✕ ' + m.proc + ': 入力欄なし'); return; }
-      inp.value = String(need);
-      needCache[p.key] = String(need);
-      applied.push('→ ' + m.proc + ' = ' + need + '名 (' + sum.toFixed(1) + 'を切り上げ)');
+      const p = procs.find(x => x.proc === m.proc) || null;
+      return { proc: m.proc, sum: sum, ng: ng, need: ng ? null : Math.ceil(sum - 1e-9), ref: p };
+    });
+  }
+
+  function setApplyEnabled(on) {
+    const b = calcEl && calcEl.querySelector('#aa-calc-apply');
+    if (!b) return;
+    b.disabled = !on;
+    b.style.opacity = on ? '1' : '.45';
+    b.style.cursor = on ? 'pointer' : 'default';
+  }
+
+  // 算出結果を必要人数の入力欄へ書き込む
+  function calcApply() {
+    if (!lastCalc) { calcOut('先に算出してください'); return; }
+    const st = readState();
+    if (!st.ok) { calcOut('アプリ未検出: ' + st.err); return; }
+
+    const applied = [];
+    boardTargets(lastCalc.detail, collectProcs(st)).forEach(function (x) {
+      if (x.ng) { applied.push('✕ ' + x.proc + ': UPH未設定'); return; }
+      if (!x.ref) { applied.push('✕ ' + x.proc + ': 配置表に該当工程なし'); return; }
+      const inp = panelEl.querySelector('input[data-key="' + x.ref.key + '"]');
+      if (!inp) { applied.push('✕ ' + x.proc + ': 入力欄なし'); return; }
+      inp.value = String(x.need);
+      needCache[x.ref.key] = String(x.need);
+      applied.push('✔ ' + x.proc + ' = ' + x.need + '名');
     });
 
     updateTotal(st);
-    calcOut(lines.join('\n') + '\n' + applied.join('\n') + '\n実行を押すと反映されます');
+    calcOut(lastCalc.text + '\n──────────\n' + applied.join('\n'));
   }
 
   // 入力した数値を 0 にするだけ。盤面の配置には一切触らない。
